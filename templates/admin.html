@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Result Checker - Admin Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; }
+        .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .navbar-brand { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/admin">Result Checker Admin</a>
+            <div class="d-flex">
+                <a href="/" class="btn btn-outline-light btn-sm" target="_blank">View User Site</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row">
+            <!-- Upload Form -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Upload New Result PDF</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/admin/upload" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="exam_name" class="form-label">Exam Name</label>
+                                <input type="text" class="form-control" id="exam_name" name="exam_name" required placeholder="e.g., SSC CGL 2024">
+                            </div>
+                            <div class="mb-3">
+                                <label for="tier" class="form-label">Tier / Phase</label>
+                                <input type="text" class="form-control" id="tier" name="tier" required placeholder="e.g., Tier 1">
+                            </div>
+                            <div class="mb-3">
+                                <label for="pattern_mode" class="form-label">Pattern Detection Mode</label>
+                                <select class="form-select" id="pattern_mode" onchange="togglePatternMode()">
+                                    <option value="auto" selected>Auto-Detect (Recommended)</option>
+                                    <option value="custom">Custom Regex Pattern</option>
+                                </select>
+                            </div>
+                            <div class="mb-3" id="custom_regex_container" style="display: none;">
+                                <label for="regex_pattern" class="form-label">Roll No. Regex Pattern</label>
+                                <input type="text" class="form-control" id="regex_pattern" name="regex_pattern">
+                                <small class="text-muted">Enter a custom regex, e.g., \b\d{10}\b</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Result PDF</label>
+                                <input class="form-control" type="file" id="file" name="file" accept=".pdf" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Upload and Extract</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Exam Management -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">Manage Exams</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Exam</th>
+                                    <th>Tier</th>
+                                    <th>Roll Nos.</th>
+                                    <th>Status</th>
+                                    <th>Default</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for exam in exams %}
+                                <tr>
+                                    <td>{{ exam.id }}</td>
+                                    <td>{{ exam.exam_name }}</td>
+                                    <td>{{ exam.tier }}</td>
+                                    <td>{{ exam.count }}</td>
+                                    <td>
+                                        <form action="/admin/toggle_active/{{ exam.id }}" method="post" style="display:inline;">
+                                            {% if exam.is_active %}
+                                                <button type="submit" class="btn btn-sm btn-success">Active</button>
+                                            {% else %}
+                                                <button type="submit" class="btn btn-sm btn-secondary">Inactive</button>
+                                            {% endif %}
+                                        </form>
+                                    </td>
+                                    <td>
+                                        <form action="/admin/toggle_default/{{ exam.id }}" method="post" style="display:inline;">
+                                            {% if exam.is_default %}
+                                                <button type="submit" class="btn btn-sm btn-warning" disabled>Default</button>
+                                            {% else %}
+                                                <button type="submit" class="btn btn-sm btn-outline-warning">Set Default</button>
+                                            {% endif %}
+                                        </form>
+                                    </td>
+                                    <td>
+                                        <form action="/admin/delete/{{ exam.id }}" method="post" onsubmit="return confirm('Are you sure you want to delete this exam and all its roll numbers?');" style="display:inline;">
+                                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">No exams uploaded yet.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function togglePatternMode() {
+            const mode = document.getElementById('pattern_mode').value;
+            const customContainer = document.getElementById('custom_regex_container');
+            const regexInput = document.getElementById('regex_pattern');
+            if (mode === 'auto') {
+                customContainer.style.display = 'none';
+                regexInput.required = false;
+                regexInput.value = '';
+            } else {
+                customContainer.style.display = 'block';
+                regexInput.required = true;
+                regexInput.value = '\\b\\d{10}\\b';
+            }
+        }
+    </script>
+</body>
+</html>

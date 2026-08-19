@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+sql_app.db
+uploads/
+.env
+.system_generated/
