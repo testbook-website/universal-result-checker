@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Depends, Request, Form, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, Request, Form, UploadFile, File, HTTPException, BackgroundTasks, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -52,6 +53,19 @@ def send_to_google_sheet(exam_name: str, tier: str, roll_number: str, name: str,
         print(f"Error sending data to Google Sheet: {e}")
 
 app = FastAPI(title="Universal Result Checker")
+
+security = HTTPBasic()
+
+def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_password = os.getenv("ADMIN_PASSWORD", "SEO@7730")
+    if credentials.password != correct_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect admin password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 
 # Setup templates and static
 os.makedirs("templates", exist_ok=True)
@@ -110,7 +124,7 @@ async def check_result(request: Request, background_tasks: BackgroundTasks, db: 
 # --- ADMIN ROUTES ---
 
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
+async def admin_dashboard(request: Request, username: str = Depends(verify_admin), db: Session = Depends(get_db)):
     exams = db.query(models.Exam).all()
     # Add count of roll numbers
     for exam in exams:
@@ -123,6 +137,7 @@ async def upload_exam(
     tier: str = Form(...),
     regex_pattern: str = Form(None),
     file: UploadFile = File(...),
+    username: str = Depends(verify_admin),
     db: Session = Depends(get_db)
 ):
     if not file.filename.endswith(".pdf"):
@@ -158,7 +173,7 @@ async def upload_exam(
     return RedirectResponse(url="/admin", status_code=303)
 
 @app.post("/admin/toggle_default/{exam_id}")
-async def toggle_default(exam_id: int, db: Session = Depends(get_db)):
+async def toggle_default(exam_id: int, username: str = Depends(verify_admin), db: Session = Depends(get_db)):
     # Set all to false first
     db.query(models.Exam).update({models.Exam.is_default: False})
     # Set target to true
@@ -169,7 +184,7 @@ async def toggle_default(exam_id: int, db: Session = Depends(get_db)):
     return RedirectResponse(url="/admin", status_code=303)
 
 @app.post("/admin/toggle_active/{exam_id}")
-async def toggle_active(exam_id: int, db: Session = Depends(get_db)):
+async def toggle_active(exam_id: int, username: str = Depends(verify_admin), db: Session = Depends(get_db)):
     exam = db.query(models.Exam).filter(models.Exam.id == exam_id).first()
     if exam:
         exam.is_active = not exam.is_active
@@ -177,7 +192,7 @@ async def toggle_active(exam_id: int, db: Session = Depends(get_db)):
     return RedirectResponse(url="/admin", status_code=303)
 
 @app.post("/admin/delete/{exam_id}")
-async def delete_exam(exam_id: int, db: Session = Depends(get_db)):
+async def delete_exam(exam_id: int, username: str = Depends(verify_admin), db: Session = Depends(get_db)):
     exam = db.query(models.Exam).filter(models.Exam.id == exam_id).first()
     if exam:
         db.delete(exam)
