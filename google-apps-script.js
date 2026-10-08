@@ -1,13 +1,10 @@
 /**
- * Universal Result Checker - High Concurrency Google Sheets Webhook
- * 
- * Instructions:
- * 1. Open Google Sheet: https://docs.google.com/spreadsheets/d/1R06Ix6TG2O8NbZCbclCdSfdXCD-af0P3AEKMNChXLo8/edit
- * 2. Click Extensions > Apps Script.
- * 3. Replace all code with this script.
- * 4. Click Save (Disk icon).
- * 5. Click Deploy > Manage deployments > Edit (pencil icon) > Version: "New version" > Deploy.
+ * Universal Result Checker - Bound to Spreadsheet
+ * Sheet ID: 1R06Ix6TG2O8NbZCbclCdSfdXCD-af0P3AEKMNChXLo8
  */
+
+// Target Sheet ID explicitly
+var TARGET_SHEET_ID = "1R06Ix6TG2O8NbZCbclCdSfdXCD-af0P3AEKMNChXLo8";
 
 function doGet(e) {
   return handleRequest(e);
@@ -19,7 +16,6 @@ function doPost(e) {
 
 function handleRequest(e) {
   var lock = LockService.getScriptLock();
-  // Wait up to 30s to queue up burst traffic smoothly without dropping requests
   try {
     lock.waitLock(30000);
   } catch (lockErr) {
@@ -30,24 +26,16 @@ function handleRequest(e) {
   }
 
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss;
+    try {
+      ss = SpreadsheetApp.openById(TARGET_SHEET_ID);
+    } catch (openErr) {
+      ss = SpreadsheetApp.getActiveSpreadsheet();
+    }
+    
     var sheet = ss.getSheets()[0];
 
-    // Auto-create headers if sheet is completely empty
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
-        "Timestamp",
-        "Exam Name",
-        "Tier / Zone",
-        "Roll Number",
-        "Candidate Name",
-        "Mobile Number",
-        "Status"
-      ]);
-      sheet.getRange("A1:G1").setFontWeight("bold").setBackground("#e8f0fe");
-    }
-
-    // Parse parameters from POST body or GET query params
+    // Parse parameters
     var params = {};
     if (e && e.postData && e.postData.contents) {
       try {
@@ -67,7 +55,7 @@ function handleRequest(e) {
     var mobile = String(params.mobile || params.mobile_number || params.phone || "N/A").trim();
     var status = String(params.status || params.Status || "N/A").trim();
 
-    // Fast append
+    // Append entry directly
     sheet.appendRow([
       timestamp,
       examName,
@@ -78,12 +66,12 @@ function handleRequest(e) {
       status
     ]);
 
-    // Force flush to ensure immediate writing
     SpreadsheetApp.flush();
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       message: "Data logged successfully",
+      sheetName: sheet.getName(),
       timestamp: timestamp
     })).setMimeType(ContentService.MimeType.JSON);
 
