@@ -1,10 +1,20 @@
 /**
- * Universal Result Checker - Bound to Spreadsheet
- * Sheet ID: 1R06Ix6TG2O8NbZCbclCdSfdXCD-af0P3AEKMNChXLo8
+ * Universal Result Checker - Google Sheets Webhook
+ * 
+ * Instructions:
+ * 1. Open your Google Sheet (Universal Result Checker Leads):
+ *    https://docs.google.com/spreadsheets/d/1R06Ix6TG2O8NbZCbclCdSfdXCD-af0P3AEKMNChXLo8/edit
+ * 2. Click "Extensions" > "Apps Script".
+ * 3. Replace all code with this script and click Save (Floppy disk icon).
+ * 4. Click "Deploy" > "Manage deployments".
+ * 5. Click the Edit (pencil) icon:
+ *    - Version: "New version"
+ *    - Execute as: "Me"
+ *    - Who has access: "Anyone"
+ * 6. Click "Deploy".
+ * 7. COPY THE WEB APP URL (ends with /exec).
+ * 8. Paste that new URL into Render under APPS_SCRIPT_DEPLOYMENT_ID.
  */
-
-// Target Sheet ID explicitly
-var TARGET_SHEET_ID = "1R06Ix6TG2O8NbZCbclCdSfdXCD-af0P3AEKMNChXLo8";
 
 function doGet(e) {
   return handleRequest(e);
@@ -26,16 +36,11 @@ function handleRequest(e) {
   }
 
   try {
-    var ss;
-    try {
-      ss = SpreadsheetApp.openById(TARGET_SHEET_ID);
-    } catch (openErr) {
-      ss = SpreadsheetApp.getActiveSpreadsheet();
-    }
-    
+    // Automatically uses THIS spreadsheet
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheets()[0];
 
-    // Parse parameters
+    // Parse incoming parameters
     var params = {};
     if (e && e.postData && e.postData.contents) {
       try {
@@ -55,7 +60,7 @@ function handleRequest(e) {
     var mobile = String(params.mobile || params.mobile_number || params.phone || "N/A").trim();
     var status = String(params.status || params.Status || "N/A").trim();
 
-    // Append entry directly
+    // Append to sheet
     sheet.appendRow([
       timestamp,
       examName,
@@ -71,7 +76,9 @@ function handleRequest(e) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       message: "Data logged successfully",
-      sheetName: sheet.getName(),
+      sheetTitle: ss.getName(),
+      sheetTab: sheet.getName(),
+      spreadsheetUrl: ss.getUrl(),
       timestamp: timestamp
     })).setMimeType(ContentService.MimeType.JSON);
 
