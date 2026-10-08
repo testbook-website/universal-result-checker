@@ -1,19 +1,5 @@
 /**
- * Universal Result Checker - Google Sheets Webhook
- * 
- * Instructions:
- * 1. Open your Google Sheet (Universal Result Checker Leads):
- *    https://docs.google.com/spreadsheets/d/1R06Ix6TG2O8NbZCbclCdSfdXCD-af0P3AEKMNChXLo8/edit
- * 2. Click "Extensions" > "Apps Script".
- * 3. Replace all code with this script and click Save (Floppy disk icon).
- * 4. Click "Deploy" > "Manage deployments".
- * 5. Click the Edit (pencil) icon:
- *    - Version: "New version"
- *    - Execute as: "Me"
- *    - Who has access: "Anyone"
- * 6. Click "Deploy".
- * 7. COPY THE WEB APP URL (ends with /exec).
- * 8. Paste that new URL into Render under APPS_SCRIPT_DEPLOYMENT_ID.
+ * Universal Result Checker - Google Sheets Webhook (Writes directly starting from Row 2)
  */
 
 function doGet(e) {
@@ -36,9 +22,22 @@ function handleRequest(e) {
   }
 
   try {
-    // Automatically uses THIS spreadsheet
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheets()[0];
+
+    // Ensure header row exists at Row 1
+    if (sheet.getRange("A1").getValue() === "") {
+      sheet.getRange(1, 1, 1, 7).setValues([[
+        "Timestamp",
+        "Exam Name",
+        "Tier / Zone",
+        "Roll Number",
+        "Candidate Name",
+        "Mobile Number",
+        "Status"
+      ]]);
+      sheet.getRange("A1:G1").setFontWeight("bold").setBackground("#e8f0fe");
+    }
 
     // Parse incoming parameters
     var params = {};
@@ -60,8 +59,16 @@ function handleRequest(e) {
     var mobile = String(params.mobile || params.mobile_number || params.phone || "N/A").trim();
     var status = String(params.status || params.Status || "N/A").trim();
 
-    // Append to sheet
-    sheet.appendRow([
+    // Find the first genuinely empty row in Column A (fills row 2, 3, 4 without skipping)
+    var colA = sheet.getRange("A1:A").getValues();
+    var nextRow = 2;
+    for (var i = 1; i < colA.length; i++) {
+      if (colA[i][0] !== "" && colA[i][0] !== null && colA[i][0] !== undefined) {
+        nextRow = i + 2;
+      }
+    }
+
+    var rowData = [
       timestamp,
       examName,
       tier,
@@ -69,16 +76,19 @@ function handleRequest(e) {
       name,
       mobile,
       status
-    ]);
+    ];
+
+    // Write directly into row 2, 3, 4 etc.
+    sheet.getRange(nextRow, 1, 1, rowData.length).setValues([rowData]);
 
     SpreadsheetApp.flush();
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       message: "Data logged successfully",
+      writtenAtRow: nextRow,
       sheetTitle: ss.getName(),
       sheetTab: sheet.getName(),
-      spreadsheetUrl: ss.getUrl(),
       timestamp: timestamp
     })).setMimeType(ContentService.MimeType.JSON);
 
