@@ -23,6 +23,7 @@ models.Base.metadata.create_all(bind=engine)
 def send_to_google_sheet(exam_name: str, tier: str, roll_number: str, name: str, mobile: str, status: str):
     deployment_id = os.getenv("APPS_SCRIPT_DEPLOYMENT_ID")
     if not deployment_id or not deployment_id.strip():
+        print("[Google Sheets] APPS_SCRIPT_DEPLOYMENT_ID is not configured. Skipping sync.")
         return
     
     deployment_id = deployment_id.strip()
@@ -30,27 +31,61 @@ def send_to_google_sheet(exam_name: str, tier: str, roll_number: str, name: str,
         url = deployment_id
     else:
         url = f"https://script.google.com/macros/s/{deployment_id}/exec"
-    payload = {
-        "exam_name": exam_name,
-        "tier": tier,
-        "roll_number": roll_number,
+    
+    # Ensure Web App URL ends with /exec
+    if not url.endswith("/exec"):
+        if "/exec" not in url:
+            url = url.rstrip("/") + "/exec"
+            
+    import urllib.parse
+    query_str = urllib.parse.urlencode({
+        "name": name,
         "student_name": name,
+        "rollNumber": roll_number,
+        "roll_number": roll_number,
+        "roll": roll_number,
+        "mobile": mobile,
         "mobile_number": mobile,
-        "status": status
+        "phone": mobile,
+        "exam_name": exam_name,
+        "exam": exam_name,
+        "tier": tier,
+        "status": status,
+        "zone": f"{exam_name} - {tier}"
+    })
+    
+    get_url = f"{url}?{query_str}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     
+    # 1. Primary: Send via GET query parameters (Fastest, 100% reliable with Google Apps Script 302 redirects)
     try:
+        get_req = urllib.request.Request(get_url, headers=headers)
+        with urllib.request.urlopen(get_req, timeout=20) as response:
+            res_body = response.read().decode('utf-8', errors='ignore')
+            print(f"[Google Sheets] Data successfully sent to Google Sheet: {res_body[:100]}")
+            return
+    except Exception as get_err:
+        print(f"[Google Sheets] GET request failed ({get_err}). Attempting POST fallback...")
+
+    # 2. Fallback: Send via JSON POST
+    try:
+        payload = {
+            "name": name,
+            "rollNumber": roll_number,
+            "mobile": mobile,
+            "exam_name": exam_name,
+            "tier": tier,
+            "status": status
+        }
         data = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(
-            url, 
-            data=data, 
-            headers={'Content-Type': 'application/json'}
-        )
-        # Google Apps Script redirects on POST, urllib handles redirects automatically
-        with urllib.request.urlopen(req, timeout=10) as response:
-            response.read()
-    except Exception as e:
-        print(f"Error sending data to Google Sheet: {e}")
+        post_req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json', 'User-Agent': headers['User-Agent']})
+        with urllib.request.urlopen(post_req, timeout=20) as response:
+            res_body = response.read().decode('utf-8', errors='ignore')
+            print(f"[Google Sheets] Data successfully sent to Google Sheet via POST fallback: {res_body[:100]}")
+    except Exception as post_err:
+        print(f"[Google Sheets] Both GET and POST requests failed: {post_err}")
 
 app = FastAPI(title="Universal Result Checker")
 
